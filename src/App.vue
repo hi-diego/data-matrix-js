@@ -4,5 +4,5 @@ import LiveCamera from './components/LiveCamera.vue'
 </script>
 
 <template>
-  <LiveCamera/>
+  <BraceletDetector/>
 </template>
