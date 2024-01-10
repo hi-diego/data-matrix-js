@@ -1,11 +1,14 @@
 <template lang="pug">
-div()
-  video(ref="videoElement" autoplay playsinline muted style="display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;")
-  h1(style="position: relative; z-index: 1; display: block;") {{ userName }}
+.app()
+  video(ref="videoElement" autoplay playsinline muted style="display: block; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; filter: grayscale(1)")
+  h1(style="position: relative; z-index: 4; display: block; color: white;") {{ userName === null ? 'Escanea tu pulsera' : userName }}
+  h1(style="position: relative; z-index: 1; display: block;") {{ controlsY }}
+  AppMenu(v-if="userName" :items="categories" :scroll="controlsY")
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import AppMenu from './AppMenu.vue';
 import * as tf from "@tensorflow/tfjs";
 import * as handpose from "@tensorflow-models/handpose";
 
@@ -13,15 +16,38 @@ const userName = ref(null);
 const videoElement = ref(null);
 const formats = ref([]);
 const barcodes = ref([]);
+const controlsY = ref(0);
 let video, scene, camera, renderer, texture, material, geometry, mesh, composer;
-const barcodeDetector = new BarcodeDetector({ formats: ['data_matrix'] });
+var barcodeDetector = null;
+const categories = ['Cafe', 'Entradas', 'Cerveza', 'Vino', 'Cocktails', 'Destilados', 'Café', 'Té', 'Postres'];
+var net = null;
 
-onMounted(() => {
+const loadHandModel = async () => {
+  console.log('Loading Handpose model...');
+  net = await handpose.load();
+  console.log('Handpose model loaded.');
+  return net;
+};
+
+try {
+  barcodeDetector = new BarcodeDetector({ formats: ['data_matrix'] });
+} catch (e) {
+  console.log('BarcodeDetector is not supported by this browser.');
+}
+
+onMounted(async () => {
+  loadHandModel();
   initCamera();
 });
 
 
 function detectBarcodes () {
+  if (!barcodeDetector) {
+    // alert('BarcodeDetector is not supported by this browser.');
+    return;
+  }
+  if (userName.value !== null) return;
+  if (!videoElement.value) return;
   formats.value = 'detecting...';
   // const create image from video
   const imageData = captureCurrentFrame(videoElement.value);
@@ -60,6 +86,30 @@ function captureCurrentFrame(videoElement) {
   return _canvas;
 }
 
+const detectHand = async (network, _video) => {
+  // Make Detections
+  // if (0.9 < hand && hand[0] && hand[0].handInViewConfidence) return;
+  const hand = await network.estimateHands(_video);
+  if (!(hand && hand[0])) return;
+  // Draw mesh
+  const palmBaseXCoordinate = hand[0]?.annotations?.palmBase[0][0];
+  const palmBaseYCoordinate = hand[0]?.annotations?.palmBase[0][1];
+  const yScreenPercentage = ((palmBaseYCoordinate) / videoElement.value.videoHeight);
+  controlsY.value =  yScreenPercentage;
+  
+  // the percentage of the screen that palmBaseXCoordinate is in the controlBoundingBox
+  // const boundPercentage = (palmBaseXCoordinate - controlBoundingBox.x) / controlBoundingBox.width;
+  // const boundPercentageInverted = 100 - boundPercentage * 100;
+  // // scroll boundPercentage in X for tickets html container
+  // tickets.value.scrollLeft = boundPercentage * tickets.value.scrollWidth;
+  
+  // if (!isInRange(yScreenPercentage, lastPercentage - 0.005, lastPercentage + 0.005)) {
+  //   lastPercentage = yScreenPercentage;
+  //   scrollModal.value = lastPercentage;
+  // }
+}
+
+
 function initCamera() {
   video = videoElement.value;
   if (navigator.mediaDevices.getUserMedia) {
@@ -74,10 +124,11 @@ function initCamera() {
       .then((stream) => {
         video.srcObject = stream;
         video.play();
-        window.setInterval(() => {
-          // if (!!userName) return;
+        const timer = window.setInterval(() => {
           detectBarcodes();
-        }, 100);
+          detectHand(net, video);
+          // window.clearInterval(timer);
+        }, 50);
       })
       .catch((error) => {
         console.log("Something went wrong!", error);
@@ -87,4 +138,7 @@ function initCamera() {
 </script>
 
 <style scoped>
+.app {
+  padding: 0;
+}
 </style>

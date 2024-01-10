@@ -1,10 +1,8 @@
 <template lang="pug">
 div(ref="mount")
-  pre {{ formats }}
-  pre {{ barcodes }}
-  img(v-for="rectangle in rectangleImages" :src="rectangle")
-  video(ref="videoElement" autoplay playsinline muted style="display: block; position: fixed; top: 0; left: 0; z-index: 1; width: 100vw; height: 720px;")
-  //- canvas#rectangles-canvas(style="display: none; position: absolute; top: 0; left: 0; z-index: 2; width: 1280px; height: 720px;" ref="rectCanvas")
+  //- img(v-for="rectangle in rectangleImages" :src="rectangle")
+  video(ref="videoElement" autoplay playsinline muted style="display: block; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; filter: grayscale(1); display: none;")
+  //- canvas#rectangles-canvas(style="display: none; position: absolute; top: 0; left: 0; z-index: 2;" ref="rectCanvas" willReadFrequently="true")
 </template>
 
 <script setup>
@@ -24,14 +22,12 @@ const barcodes = ref([]);
 const rectangleImages = ref([]);
 let video, scene, camera, renderer, texture, material, geometry, mesh, composer;
 
-onMounted(() => {
-  initCamera();
-  initThree();
-  animate();
-  // check supported types
-  // BarcodeDetector.getSupportedFormats().then((supportedFormats) => {
-  //   supportedFormats.forEach((format) => formats.value.push(format));
-  // });
+onMounted(async () => {
+  const v = await initCamera();
+  window.setTimeout(() => {
+    initThree();
+    animate();
+  }, 1000);
 });
 
 const dilationShader = {
@@ -71,7 +67,7 @@ name: 'AdaptativeThresholdShader',
 uniforms: {
   tDiffuse: { value: null },
   uResolution: { value: new THREE.Vector2(1280, 720) },
-  radius: { value: 20 },
+  radius: { value: 40 },
 },
 vertexShader: /* glsl */`
   varying vec2 vUv;
@@ -159,73 +155,50 @@ void main() {
 `
 };
 
-function detectBarcodes () {
-  const barcodeDetector = new BarcodeDetector({ formats: ['data_matrix'] });
-  formats.value = 'detecting...';
-  // const create image from video
-  const imageData = captureCurrentFrame(videoElement.value);
-  const imgUrl = imageData.toDataURL();
-  // rectangleImages.value.push(imgUrl);
-  barcodeDetector.detect(imageData).then((_barcodes) => {
-    if (_barcodes.length === 0) {
-      barcodes.value = 'No barcode detected.';
-      return;
-    }
-    barcodes.value = _barcodes.map(barcode => barcode.rawValue);
-    navigator.vibrate(100); // vibrate for 200ms
-  }).catch((error) => {
-    barcodes.value = error;
-    console.log(error);
-    alert(error);
-  }).finally(() => {
-    // formats.value = 'detecting...';
-  });
+function detectBarcodeLocation () {
+  // const imageData = captureCurrentFrame(videoElement.value);
+  // const imgUrl = imageData.toDataURL();
 }
 
-function initCamera() {
+async function initCamera() {
+  if (!navigator.mediaDevices.getUserMedia) return;
   video = videoElement.value;
-  if (navigator.mediaDevices.getUserMedia) {
-    const constraints = {
-      video: {
-        width: { min: 1280 },
-        height: { min: 720 },
-        facingMode: 'user'
-      }
-    };
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then((stream) => {
-        video.srcObject = stream;
-        video.play();
-        window.setInterval(() => {
-          detectBarcodes();
-        }, 100);
-      })
-      .catch((error) => {
-        console.log("Something went wrong!", error);
-      });
-  }
+  const constraints = {
+    video: {
+      width: { min: 1280 },
+      height: { min: 720 },
+      facingMode: 'user'
+    }
+  };
+  const stream = await navigator.mediaDevices.getUserMedia(constraints)
+  video.srcObject = stream;
+  video.play();
+  console.log(video.videoHeight)
+  return video;
 }
 
 var cube = null;
 
 function initThree() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(75, 1280 / 720, 0.1, 1000);
+  // alert(videoElement.value.videoWidth, videoElement.value.videoHeight)
+  camera = new THREE.PerspectiveCamera(75, videoElement.value.videoWidth / videoElement.value.videoHeight, 0.1, 1000);
   renderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(videoElement.value.videoWidth, videoElement.value.videoHeight);
   renderer.domElement.style.position = 'fixed';
   renderer.domElement.style.top = 0;
   renderer.domElement.style.left = 0;
   renderer.domElement.style.zIndex = 100;
-  renderer.domElement.style.width = '1280px';
-  renderer.domElement.style.height = '720px';
+  // renderer.domElement.style.width = videoElement.value.videoWidth + 'px';
+  // renderer.domElement.style.height = videoElement.value.videoHeight + 'px';
 
-  // mount.value.appendChild(renderer.domElement);
+  mount.value.appendChild(renderer.domElement);
 
   texture = new THREE.VideoTexture(video);
   material = new THREE.MeshBasicMaterial({ map: texture });
-  geometry = new THREE.PlaneGeometry(1280, 720);
+  geometry = new THREE.PlaneGeometry(videoElement.value.videoWidth, videoElement.value.videoHeight, 1, 1);
   mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(-100, 100, -200);
 
   // cube = new THREE.Mesh(new THREE.BoxGeometry(100, 100, 100), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
   // scene.add(cube);
@@ -236,14 +209,14 @@ function initThree() {
 
   // Canny operator pass 
   var effectCanny = new ShaderPass(CannyOperatorShader);
-  effectCanny.uniforms['resolution'].value.x = 1280;
-  effectCanny.uniforms['resolution'].value.y = 720;
+  effectCanny.uniforms['resolution'].value.x = videoElement.value.videoWidth;
+  effectCanny.uniforms['resolution'].value.y = videoElement.value.videoHeight;
   effectCanny.renderToScreen = true;
 
   // Sobel operator pass
   var effectSobel = new ShaderPass(SobelOperatorShader);
-  effectSobel.uniforms['resolution'].value.x = 1280;
-  effectSobel.uniforms['resolution'].value.y = 720;
+  effectSobel.uniforms['resolution'].value.x = videoElement.value.videoWidth;
+  effectSobel.uniforms['resolution'].value.y = videoElement.value.videoHeight;
   
   
   var effectBinary = new ShaderPass(BinaryShader);
@@ -255,10 +228,10 @@ function initThree() {
   
   
   var effectAdaptative = new ShaderPass(AdaptativeThresholdShader);
-  composer.addPass(effectBinary);
   // composer.addPass(effectAdaptative);
-  // composer.addPass(effectSobel);
-  composer.addPass(effectCanny);
+  composer.addPass(effectSobel);
+  // composer.addPass(effectBinary);
+  // composer.addPass(effectCanny);
   
   var effectDilate = new ShaderPass(dilationShader);
   effectDilate.uniforms['radius'].value = 0.5;
@@ -268,18 +241,18 @@ function initThree() {
 
 
   scene.add(mesh);
-  camera.position.z = 470;
+  camera.position.z = 600;
 }
 
-function captureCurrentFrame(videoElement) {
+function captureCurrentFrame(_videoElement) {
   // Create a canvas with the same dimensions as the video.
   const _canvas = document.createElement('canvas');
-  _canvas.width = videoElement.videoWidth;
-  _canvas.height = videoElement.videoHeight;
+  _canvas.width = _videoElement.videoWidth;
+  _canvas.height = _videoElement.videoHeight;
 
   // Draw the current frame of the video onto the canvas.
   const ctx = _canvas.getContext('2d');
-  ctx.drawImage(videoElement, 0, 0, _canvas.width, _canvas.height);
+  ctx.drawImage(_videoElement, 0, 0, _canvas.width, _canvas.height);
 
   // // Retrieve the image data from the canvas.
   // const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -408,17 +381,10 @@ function locateWhiteSquares() {
 }
 
 function animate() {
-  // window.setTimeout(() => {
-  //   requestAnimationFrame(animate);
-  //   detect();
-  // }, 1000 / 100);
-  // composer.render();
+  window.setTimeout(() => {
+    composer.render();
+    requestAnimationFrame(animate);
+    // detect();
+  }, 1);
 }
 </script>
-
-<style scoped>
-div {
-  width: 100%;
-  height: 100vh;
-}
-</style>
