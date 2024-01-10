@@ -1,8 +1,7 @@
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'
-import LiveCamera from './components/LiveCamera.vue'
+import BraceletDetector from './components/BraceletDetector.vue'
 </script>
 
 <template>
-  <LiveCamera/>
+  <BraceletDetector/>
 </template>

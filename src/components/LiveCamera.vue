@@ -3,7 +3,7 @@ div(ref="mount")
   pre {{ formats }}
   pre {{ barcodes }}
   img(v-for="rectangle in rectangleImages" :src="rectangle")
-  video(ref="videoElement" autoplay playsinline muted style="display: block; position: absolute; top: 0; left: 0; z-index: 1; width: 1280px; height: 720px;")
+  video(ref="videoElement" autoplay playsinline muted style="display: block; position: fixed; top: 0; left: 0; z-index: 1; width: 100vw; height: 720px;")
   //- canvas#rectangles-canvas(style="display: none; position: absolute; top: 0; left: 0; z-index: 2; width: 1280px; height: 720px;" ref="rectCanvas")
 </template>
 
@@ -172,7 +172,7 @@ function detectBarcodes () {
       return;
     }
     barcodes.value = _barcodes.map(barcode => barcode.rawValue);
-    navigator.vibrate(50); // vibrate for 200ms
+    navigator.vibrate(100); // vibrate for 200ms
   }).catch((error) => {
     barcodes.value = error;
     console.log(error);
