@@ -2,10 +2,10 @@
 <div class="order-detector">
   <div class="d-flex">
   </div>
-  <pre> {{ log }} </pre>
   <!-- <img :src="imageUrl" alt=""> -->
-  <canvas ref="canvas" id="canvas" style="opacity: 1; position: absolute; top: 0; left 0;"></canvas>
+  <canvas ref="canvas" id="canvas" style="opacity: 1; position: absolute; bottom: 0; left 0;"></canvas>
   <video id="video" playsinline autoplay></video>
+  <h1> {{ log }} </h1>
 </div>
 </template>
 
@@ -34,7 +34,7 @@ const payload = () => ({
       "content": [
         {
           "type": "text",
-          "text": "Detect the handwritten text in the image and return the raw text and nothing more",
+          "text": "Detect handwritten text in the image and returns the plain text and nothing else",
         },
         {
           "type": "image_url",
@@ -89,7 +89,7 @@ function takePhoto() {
     // send to openai
     axios.post(url, payload(), { headers: headers })
       .then((response) => {
-        log.value = response?.data?.choices?.message?.content;
+        log.value = response?.data?.choices[0]?.message?.content;
       })
       .catch((error) => {
         console.log(error);
