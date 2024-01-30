@@ -89,7 +89,7 @@ function takePhoto() {
     // send to openai
     axios.post(url, payload(), { headers: headers })
       .then((response) => {
-        log.value = response.data;
+        log.value = response?.data?.choices?.message?.content;
       })
       .catch((error) => {
         console.log(error);
